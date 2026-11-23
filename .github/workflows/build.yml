@@ -1,4 +1,4 @@
-name: Build GrowTracker APK v2
+name: Build GrowTracker APK v3
 on:
   push:
     branches: [ main, master ]
@@ -69,8 +69,8 @@ jobs:
                   applicationId = "com.growtracker.app"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 2
-                  versionName = "2.0"
+                  versionCode = 3
+                  versionName = "3.0"
               }
               buildTypes { release { isMinifyEnabled = false } }
               compileOptions {
@@ -106,9 +106,6 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-              <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
               <application
                   android:allowBackup="false"
                   android:label="GrowTracker"
@@ -258,16 +255,54 @@ jobs:
                   if (dao.getSeedFlag() != null) return@withContext
                   val big = Plant("plant_big", "Большой", "Сатива", "2026-10-04", "#B4F000")
                   val small = Plant("plant_small", "Малый", "Индика", "2026-10-06", "#8B7BF7")
-                  dao.insertPlant(big)
-                  dao.insertPlant(small)
-                  dao.insertEvent(Event(plantId="plant_small", type="water", dateTime="2026-09-15T10:00:00", inPpm=null, outPpm=null, volumeL=2.0, note="Перелив. Начал чахнуть."))
-                  dao.insertEvent(Event(plantId="plant_big", type="water", dateTime="2026-09-17T10:00:00", inPpm=620, outPpm=920, volumeL=2.0, note="TriPart + CalMag + Taste"))
-                  dao.insertEvent(Event(plantId="plant_small", type="water", dateTime="2026-09-22T10:00:00", inPpm=449, outPpm=742, volumeL=1.0, note="TriPart + Taste"))
-                  dao.insertEvent(Event(plantId="plant_big", type="flip", dateTime="2026-10-04T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Перевод на 12/12"))
-                  dao.insertEvent(Event(plantId="plant_small", type="flip", dateTime="2026-10-06T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Перевод на 12/12"))
-                  dao.insertEvent(Event(plantId="plant_big", type="water", dateTime="2026-11-15T10:00:00", inPpm=460, outPpm=920, volumeL=2.0, note="TriPart + Atami (1.4 л + 0.6 л)"))
-                  dao.insertEvent(Event(plantId="plant_big", type="flush", dateTime="2026-11-19T10:00:00", inPpm=170, outPpm=830, volumeL=2.0, note="Промывка 1"))
-                  dao.insertEvent(Event(plantId="plant_small", type="feed", dateTime="2026-11-22T10:00:00", inPpm=676, outPpm=749, volumeL=1.5, note="TriPart + Delta 9, pH 6.5"))
+                  dao.insertPlant(big); dao.insertPlant(small)
+                  val evs = listOf(
+                      Event(plantId="plant_small", type="water", dateTime="2026-09-15T10:00:00", inPpm=null, outPpm=null, volumeL=2.0, note="2 литра. Начал чахнуть. (Перелив)"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-09-17T10:00:00", inPpm=620, outPpm=920, volumeL=2.0, note="TriPart + CalMag + Taste"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-09-22T10:00:00", inPpm=449, outPpm=742, volumeL=1.0, note="TriPart + Taste (1 л)"),
+                      Event(plantId="plant_small", type="spray", dateTime="2026-09-24T10:00:00", inPpm=340, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="spray", dateTime="2026-09-24T10:00:00", inPpm=340, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-09-25T10:00:00", inPpm=139, outPpm=538, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_small", type="flush", dateTime="2026-09-27T10:00:00", inPpm=100, outPpm=477, volumeL=null, note="Вода, перекись, янтарка (2 этапа)"),
+                      Event(plantId="plant_big", type="flush", dateTime="2026-09-30T10:00:00", inPpm=77, outPpm=391, volumeL=null, note="Промывка + обрезка. Вода."),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-09-30T11:00:00", inPpm=453, outPpm=386, volumeL=null, note="TriPart + CalMag + Atami + янтарка"),
+                      Event(plantId="plant_small", type="spray", dateTime="2026-10-02T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Simplex Mass"),
+                      Event(plantId="plant_big", type="spray", dateTime="2026-10-02T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Simplex Mass"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-10-03T10:00:00", inPpm=507, outPpm=715, volumeL=null, note="CalMag + TriPart + Atami"),
+                      Event(plantId="plant_big", type="flip", dateTime="2026-10-04T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Начало цветения"),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-10-05T10:00:00", inPpm=445, outPpm=640, volumeL=null, note="CalMag + TriPart + Atami + янтарка"),
+                      Event(plantId="plant_small", type="flip", dateTime="2026-10-06T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Начало цветения"),
+                      Event(plantId="plant_small", type="spray", dateTime="2026-10-06T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="spray", dateTime="2026-10-06T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-10-09T10:00:00", inPpm=200, outPpm=646, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-10-11T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-10-14T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-10-15T10:00:00", inPpm=518, outPpm=645, volumeL=null, note="TriPart + CalMag + Delta 9 (корень)"),
+                      Event(plantId="plant_small", type="spray", dateTime="2026-10-15T11:00:00", inPpm=null, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="spray", dateTime="2026-10-15T11:00:00", inPpm=null, outPpm=null, volumeL=null, note="Delta 9 по листу"),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-10-17T10:00:00", inPpm=504, outPpm=546, volumeL=null, note="Только TriPart (вода 240 ppm), pH ~6.0"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-10-19T10:00:00", inPpm=230, outPpm=425, volumeL=null, note="Вода + янтарка, pH 6.0–6.1"),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-10-21T10:00:00", inPpm=570, outPpm=830, volumeL=null, note="TriPart + Atami + Delta 9, pH 6.2–6.8 → 6.9"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-10-23T10:00:00", inPpm=511, outPpm=716, volumeL=null, note="TriPart + Atami, pH ~6.1 → ~6.5"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-10-26T10:00:00", inPpm=340, outPpm=630, volumeL=null, note="Вода + Taste"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-10-28T10:00:00", inPpm=230, outPpm=429, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-10-30T10:00:00", inPpm=240, outPpm=560, volumeL=null, note="Вода"),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-10-30T10:10:00", inPpm=440, outPpm=462, volumeL=null, note="TriPart + Atami + Delta 9 (ОШИБКА: мало PPM)"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-11-01T10:00:00", inPpm=640, outPpm=750, volumeL=null, note="TriPart + Atami + Delta 9 (1.5 мл/1.4 л)"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-11-02T10:00:00", inPpm=750, outPpm=null, volumeL=null, note="Полив 1: TriPart + Atami + Delta 9 (1.4 л)"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-11-02T10:10:00", inPpm=520, outPpm=749, volumeL=1.0, note="Полив 2: Вода + остатки Biobizz Bloom (1 л)"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-11-06T10:00:00", inPpm=240, outPpm=426, volumeL=1.4, note="Вода + Atami (1.4 л)"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-11-07T10:00:00", inPpm=240, outPpm=740, volumeL=2.0, note="Вода + Atami (2 л)"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-11-10T10:00:00", inPpm=666, outPpm=749, volumeL=null, note="TriPart + Atami + Delta 9, pH 6.0–6.3"),
+                      Event(plantId="plant_big", type="water", dateTime="2026-11-11T10:00:00", inPpm=240, outPpm=880, volumeL=2.0, note="Вода (0.6 л) + Вода/Atami/Delta 9 (1.4 л)"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-11-14T10:00:00", inPpm=240, outPpm=700, volumeL=null, note="Вода + Atami"),
+                      Event(plantId="plant_big", type="feed", dateTime="2026-11-15T10:00:00", inPpm=460, outPpm=920, volumeL=2.0, note="TriPart + Atami (1.4 л + 0.6 л)"),
+                      Event(plantId="plant_small", type="water", dateTime="2026-11-18T10:00:00", inPpm=180, outPpm=340, volumeL=null, note="Вода"),
+                      Event(plantId="plant_big", type="flush", dateTime="2026-11-19T10:00:00", inPpm=170, outPpm=830, volumeL=2.0, note="Вода (2 л) - Промывка 1"),
+                      Event(plantId="plant_big", type="flush", dateTime="2026-11-19T10:20:00", inPpm=180, outPpm=460, volumeL=1.4, note="Вода (1.4 л) - Промывка 2"),
+                      Event(plantId="plant_small", type="feed", dateTime="2026-11-22T10:00:00", inPpm=676, outPpm=749, volumeL=null, note="TriPart + Delta 9, pH 6.5")
+                  )
+                  evs.forEach { dao.insertEvent(it) }
                   dao.insertSetting(Setting("seed_imported", "true"))
               }
           }
@@ -279,6 +314,7 @@ jobs:
           import androidx.lifecycle.AndroidViewModel
           import androidx.lifecycle.viewModelScope
           import com.growtracker.app.data.AppDatabase
+          import com.growtracker.app.data.Event
           import com.growtracker.app.data.SeedData
           import kotlinx.coroutines.flow.SharingStarted
           import kotlinx.coroutines.flow.stateIn
@@ -290,6 +326,9 @@ jobs:
               val events = dao.getEvents().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
               init {
                   viewModelScope.launch { SeedData.populate(db) }
+              }
+              fun addEvent(event: Event) {
+                  viewModelScope.launch { dao.insertEvent(event) }
               }
           }
           EOF
@@ -362,20 +401,14 @@ jobs:
           package com.growtracker.app.navigation
           import androidx.compose.foundation.layout.padding
           import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.filled.Add
           import androidx.compose.material.icons.outlined.BarChart
           import androidx.compose.material.icons.outlined.CalendarToday
           import androidx.compose.material.icons.outlined.Home
           import androidx.compose.material.icons.outlined.List
           import androidx.compose.material.icons.outlined.Settings
-          import androidx.compose.material3.Icon
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.NavigationBar
-          import androidx.compose.material3.NavigationBarItem
-          import androidx.compose.material3.NavigationBarItemDefaults
-          import androidx.compose.material3.Scaffold
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
-          import androidx.compose.runtime.getValue
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.graphics.vector.ImageVector
           import androidx.lifecycle.viewmodel.compose.viewModel
@@ -401,7 +434,19 @@ jobs:
               val navController = rememberNavController()
               val items = listOf(Screen.Home, Screen.Journal, Screen.Calendar, Screen.Charts, Screen.Menu)
               val viewModel: MainViewModel = viewModel()
+              var showAddDialog by remember { mutableStateOf(false) }
               Scaffold(
+                  floatingActionButton = {
+                      if (showAddDialog.not()) {
+                          FloatingActionButton(
+                              onClick = { showAddDialog = true },
+                              containerColor = Lime,
+                              contentColor = OnLime
+                          ) {
+                              Icon(Icons.Default.Add, contentDescription = "Добавить")
+                          }
+                      }
+                  },
                   bottomBar = {
                       NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                           val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -431,11 +476,69 @@ jobs:
                   NavHost(navController = navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
                       composable(Screen.Home.route) { HomeScreen(viewModel) }
                       composable(Screen.Journal.route) { JournalScreen(viewModel) }
-                      composable(Screen.Calendar.route) { CalendarScreen() }
-                      composable(Screen.Charts.route) { ChartsScreen() }
+                      composable(Screen.Calendar.route) { CalendarScreen(viewModel) }
+                      composable(Screen.Charts.route) { ChartsScreen(viewModel) }
                       composable(Screen.Menu.route) { MenuScreen() }
                   }
               }
+              if (showAddDialog) {
+                  AddEventDialog(
+                      onDismiss = { showAddDialog = false },
+                      onSave = { event ->
+                          viewModel.addEvent(event)
+                          showAddDialog = false
+                      }
+                  )
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/AddEventDialog.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.data.Event
+          import java.time.LocalDateTime
+          import java.time.format.DateTimeFormatter
+          @Composable
+          fun AddEventDialog(onDismiss: () -> Unit, onSave: (Event) -> Unit) {
+              var inPpm by remember { mutableStateOf("") }
+              var outPpm by remember { mutableStateOf("") }
+              var note by remember { mutableStateOf("") }
+              AlertDialog(
+                  onDismissRequest = onDismiss,
+                  title = { Text("ДОБАВИТЬ СОБЫТИЕ") },
+                  text = {
+                      Column {
+                          OutlinedTextField(value = inPpm, onValueChange = { inPpm = it }, label = { Text("Вход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = outPpm, onValueChange = { outPpm = it }, label = { Text("Выход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Заметка") })
+                      }
+                  },
+                  confirmButton = {
+                      Button(onClick = {
+                          val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                          val ev = Event(
+                              plantId = "plant_big",
+                              type = "water",
+                              dateTime = now,
+                              inPpm = inPpm.toIntOrNull(),
+                              outPpm = outPpm.toIntOrNull(),
+                              volumeL = 1.0,
+                              note = note
+                          )
+                          onSave(ev)
+                      }) { Text("Сохранить") }
+                  },
+                  dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+              )
           }
           EOF
 
@@ -580,40 +683,96 @@ jobs:
 
           cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/CalendarScreen.kt
           package com.growtracker.app.ui.screens
-          import androidx.compose.foundation.layout.Box
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
           import androidx.compose.material3.MaterialTheme
           import androidx.compose.material3.Text
           import androidx.compose.runtime.Composable
-          import androidx.compose.ui.Alignment
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.unit.dp
-          import com.growtracker.app.ui.theme.Lime
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
+          import java.time.LocalDateTime
+          import java.time.format.DateTimeFormatter
           @Composable
-          fun CalendarScreen() {
-              Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.TopStart) {
+          fun CalendarScreen(viewModel: MainViewModel) {
+              val events by viewModel.events.collectAsState()
+              val grouped = events.groupBy { LocalDateTime.parse(it.dateTime).toLocalDate() }
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
                   Text("КАЛЕНДАРЬ", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                      grouped.forEach { (date, dayEvents) ->
+                          item {
+                              Text(date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy")), style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                              Spacer(Modifier.height(8.dp))
+                              dayEvents.forEach { ev ->
+                                  val color = if (ev.plantId == "plant_big") Lime else Purple
+                                  Row(Modifier.fillMaxWidth().background(color.copy(alpha = 0.15f), RoundedCornerShape(8.dp)).padding(12.dp)) {
+                                      Text(ev.type.uppercase(), color = color)
+                                  }
+                                  Spacer(Modifier.height(4.dp))
+                              }
+                          }
+                      }
+                  }
               }
           }
           EOF
 
           cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/ChartsScreen.kt
           package com.growtracker.app.ui.screens
-          import androidx.compose.foundation.layout.Box
-          import androidx.compose.foundation.layout.fillMaxSize
-          import androidx.compose.foundation.layout.padding
+          import androidx.compose.foundation.Canvas
+          import androidx.compose.foundation.layout.*
           import androidx.compose.material3.MaterialTheme
           import androidx.compose.material3.Text
           import androidx.compose.runtime.Composable
-          import androidx.compose.ui.Alignment
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.geometry.Offset
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.Path
+          import androidx.compose.ui.graphics.drawscope.Stroke
           import androidx.compose.ui.unit.dp
-          import com.growtracker.app.ui.theme.Lime
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
           @Composable
-          fun ChartsScreen() {
-              Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.TopStart) {
+          fun ChartsScreen(viewModel: MainViewModel) {
+              val events by viewModel.events.collectAsState()
+              val data = events.filter { it.inPpm != null && it.outPpm != null }.reversed()
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
                   Text("ГРАФИКИ", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(24.dp))
+                  if (data.isNotEmpty()) {
+                      val maxPpm = data.maxOf { maxOf(it.inPpm!!, it.outPpm!!) }.coerceAtLeast(500)
+                      Canvas(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+                          val stepX = size.width / (data.size.coerceAtLeast(2) - 1)
+                          val inPath = Path()
+                          val outPath = Path()
+                          data.forEachIndexed { i, ev ->
+                              val x = i * stepX
+                              val yIn = size.height - (ev.inPpm!!.toFloat() / maxPpm) * size.height
+                              val yOut = size.height - (ev.outPpm!!.toFloat() / maxPpm) * size.height
+                              if (i == 0) { inPath.moveTo(x, yIn); outPath.moveTo(x, yOut) }
+                              else { inPath.lineTo(x, yIn); outPath.lineTo(x, yOut) }
+                          }
+                          drawPath(inPath, color = Lime, style = Stroke(width = 4f))
+                          drawPath(outPath, color = Red, style = Stroke(width = 4f))
+                      }
+                      Spacer(Modifier.height(16.dp))
+                      Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                          Text("— Вход (PPM)", color = Lime)
+                          Text("— Выход (PPM)", color = Red)
+                      }
+                  } else {
+                      Text("Нет данных для графика", color = TextSecondary)
+                  }
               }
           }
           EOF
