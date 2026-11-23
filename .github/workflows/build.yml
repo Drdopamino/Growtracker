@@ -1,4 +1,4 @@
-name: Build GrowTracker APK v4
+name: Build GrowTracker APK v5
 on:
   push:
     branches: [ main, master ]
@@ -69,8 +69,8 @@ jobs:
                   applicationId = "com.growtracker.app"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 4
-                  versionName = "4.0"
+                  versionCode = 5
+                  versionName = "5.0"
               }
               buildTypes { release { isMinifyEnabled = false } }
               compileOptions {
@@ -244,6 +244,7 @@ jobs:
                   dao.insertEvent(Event(plantId=pSmall, type="water", dateTime="2026-09-15T10:00:00", inPpm=null, outPpm=null, volumeL=2.0, note="Перелив. Начал чахнуть."))
                   dao.insertEvent(Event(plantId=pBig, type="water", dateTime="2026-09-17T10:00:00", inPpm=620, outPpm=920, volumeL=2.0, note="TriPart + CalMag + Taste"))
                   dao.insertEvent(Event(plantId=pBig, type="water", dateTime="2026-11-15T10:00:00", inPpm=460, outPpm=920, volumeL=2.0, note="TriPart + Atami"))
+                  dao.insertEvent(Event(plantId=pBig, type="feed", dateTime="2026-11-19T10:00:00", inPpm=170, outPpm=830, volumeL=2.0, note="Промывка"))
               }
           }
           EOF
@@ -425,18 +426,128 @@ jobs:
 
           cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/CalendarScreen.kt
           package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.clickable
           import androidx.compose.foundation.layout.*
-          import androidx.compose.material3.MaterialTheme
-          import androidx.compose.material3.Text
-          import androidx.compose.runtime.Composable
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.CircleShape
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Alignment
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.text.style.TextAlign
           import androidx.compose.ui.unit.dp
-          import com.growtracker.app.ui.theme.Lime
+          import androidx.compose.ui.unit.sp
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
+          import java.time.LocalDate
+          import java.time.LocalDateTime
+          import java.time.YearMonth
+          import java.time.format.DateTimeFormatter
+          import java.util.Locale
           @Composable
-          fun CalendarScreen() {
-              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+          fun CalendarScreen(viewModel: MainViewModel) {
+              val events by viewModel.events.collectAsState()
+              val plants by viewModel.plants.collectAsState()
+              var currentMonth by remember { mutableStateOf(YearMonth.now()) }
+              var selectedDate by remember { mutableStateOf(LocalDate.now()) }
+
+              Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                   Text("КАЛЕНДАРЬ", style = MaterialTheme.typography.displayLarge, color = Lime)
-                  Text("В разработке...", color = MaterialTheme.colorScheme.onBackground)
+                  Spacer(Modifier.height(16.dp))
+
+                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                      IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
+                          Text("<", color = Lime, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                      }
+                      Text(
+                          currentMonth.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))).uppercase(Locale("ru")),
+                          style = MaterialTheme.typography.titleLarge, color = TextPrimary
+                      )
+                      IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
+                          Text(">", color = Lime, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                      }
+                  }
+                  Spacer(Modifier.height(16.dp))
+
+                  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                      listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEach {
+                          Text(it, color = TextSecondary, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
+                      }
+                  }
+                  Spacer(Modifier.height(8.dp))
+
+                  val firstDay = currentMonth.atDay(1).dayOfWeek.value 
+                  val daysInMonth = currentMonth.lengthOfMonth()
+                  var dayCounter = 1
+
+                  for (week in 0..5) {
+                      if (dayCounter > daysInMonth) break
+                      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+                          for (dayOfWeek in 1..7) {
+                              if (week == 0 && dayOfWeek < firstDay) {
+                                  Spacer(Modifier.width(36.dp).height(48.dp))
+                              } else if (dayCounter <= daysInMonth) {
+                                  val date = currentMonth.atDay(dayCounter)
+                                  val isSelected = date == selectedDate
+                                  val hasEvents = events.any { LocalDateTime.parse(it.dateTime).toLocalDate() == date }
+                                  
+                                  Box(
+                                      modifier = Modifier.width(36.dp).height(48.dp).clickable { selectedDate = date },
+                                      contentAlignment = Alignment.Center
+                                  ) {
+                                      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                          Box(
+                                              modifier = Modifier.size(32.dp).background(if (isSelected) Lime else Color.Transparent, CircleShape),
+                                              contentAlignment = Alignment.Center
+                                          ) {
+                                              Text(
+                                                  text = dayCounter.toString(),
+                                                  color = if (isSelected) OnLime else TextPrimary,
+                                                  style = MaterialTheme.typography.bodyMedium
+                                              )
+                                          }
+                                          Spacer(Modifier.height(4.dp))
+                                          if (hasEvents) {
+                                              Box(Modifier.size(4.dp).background(if (isSelected) OnLime else Lime, CircleShape))
+                                          } else {
+                                              Spacer(Modifier.height(4.dp))
+                                          }
+                                      }
+                                  }
+                                  dayCounter++
+                              } else {
+                                  Spacer(Modifier.width(36.dp).height(48.dp))
+                              }
+                          }
+                      }
+                  }
+
+                  Spacer(Modifier.height(16.dp))
+                  Box(Modifier.fillMaxWidth().height(1.dp).background(Stroke))
+                  Spacer(Modifier.height(16.dp))
+
+                  val dayEvents = events.filter { LocalDateTime.parse(it.dateTime).toLocalDate() == selectedDate }
+                  if (dayEvents.isEmpty()) {
+                      Text("Нет событий в этот день", color = TextSecondary)
+                  } else {
+                      LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                          items(dayEvents) { ev ->
+                              val plant = plants.find { it.id == ev.plantId }
+                              Row(Modifier.fillMaxWidth().background(Surface, RoundedCornerShape(12.dp)).padding(12.dp)) {
+                                  Column(Modifier.weight(1f)) {
+                                      Text(ev.type.uppercase(), color = Lime, style = MaterialTheme.typography.labelSmall)
+                                      Text(plant?.name ?: "", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
+                                      if (!ev.note.isNullOrBlank()) Text(ev.note, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                                  }
+                                  Text(LocalDateTime.parse(ev.dateTime).format(DateTimeFormatter.ofPattern("HH:mm")), color = TextSecondary)
+                              }
+                          }
+                      }
+                  }
               }
           }
           EOF
@@ -470,7 +581,6 @@ jobs:
           import com.growtracker.app.data.Plant
           import com.growtracker.app.ui.MainViewModel
           import com.growtracker.app.ui.theme.Lime
-          import com.growtracker.app.ui.theme.OnLime
           @Composable
           fun MenuScreen(viewModel: MainViewModel) {
               var showPlantDialog by remember { mutableStateOf(false) }
@@ -548,7 +658,6 @@ jobs:
                   title = { Text("ДОБАВИТЬ СОБЫТИЕ") },
                   text = {
                       Column(Modifier.verticalScroll(rememberScrollState())) {
-                          // Выбор растения
                           Box {
                               OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
                                   Text(selectedPlant?.name ?: "Выбрать растение")
@@ -660,7 +769,7 @@ jobs:
                   NavHost(navController = navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
                       composable(Screen.Home.route) { HomeScreen(viewModel) }
                       composable(Screen.Journal.route) { JournalScreen(viewModel) }
-                      composable(Screen.Calendar.route) { CalendarScreen() }
+                      composable(Screen.Calendar.route) { CalendarScreen(viewModel) }
                       composable(Screen.Charts.route) { ChartsScreen() }
                       composable(Screen.Menu.route) { MenuScreen(viewModel) }
                   }
