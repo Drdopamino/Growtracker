@@ -457,7 +457,7 @@ jobs:
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.graphics.Color
           import androidx.compose.ui.graphics.StrokeCap
-          import androidx.compose.ui.graphics.drawscope.Stroke
+          import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
           import androidx.compose.ui.unit.dp
           import com.growtracker.app.ui.MainViewModel
           import com.growtracker.app.ui.theme.*
@@ -470,17 +470,18 @@ jobs:
               Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
                   Text("ГЛАВНАЯ", style = MaterialTheme.typography.displayLarge, color = Lime)
                   Spacer(Modifier.height(16.dp))
-                  val lastEvent = events.firstOrNull { it.delta != null && it.plantId == "plant_big" }
-                  if (lastEvent != null) {
+                  val lastEvent = events.firstOrNull { it.plantId == "plant_big" }
+                  val lastDelta = lastEvent?.delta
+                  if (lastEvent != null && lastDelta != null) {
                       val deltaColor = when {
-                          lastEvent.delta!! > 300 || lastEvent.outPpm!! >= 800 -> Red
-                          lastEvent.delta!! > 250 -> Yellow
+                          lastDelta > 300 || (lastEvent.outPpm ?: 0) >= 800 -> Red
+                          lastDelta > 250 -> Yellow
                           else -> Green
                       }
                       Column(Modifier.fillMaxWidth().background(deltaColor, RoundedCornerShape(20.dp)).padding(16.dp)) {
                           Text("ДЕЛЬТА ПОСЛЕДНЕГО ПОЛИВА (БОЛЬШОЙ)", style = MaterialTheme.typography.labelSmall, color = OnLime)
                           Spacer(Modifier.height(4.dp))
-                          Text("+${lastEvent.delta} PPM", style = MaterialTheme.typography.headlineLarge, color = OnLime)
+                          Text("+${lastDelta} PPM", style = MaterialTheme.typography.headlineLarge, color = OnLime)
                           Text("Вход: ${lastEvent.inPpm} → Выход: ${lastEvent.outPpm}", style = MaterialTheme.typography.bodyMedium, color = OnLime)
                       }
                       Spacer(Modifier.height(16.dp))
@@ -496,8 +497,8 @@ jobs:
                               val progress = (daysInFlower.toFloat() / 84).coerceIn(0f, 1f)
                               Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
                                   Canvas(modifier = Modifier.size(100.dp)) {
-                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)).copy(alpha = 0.2f), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
-                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)), startAngle = -90f, sweepAngle = 360f * progress, useCenter = false, style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
+                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)).copy(alpha = 0.2f), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = DrawStroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
+                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)), startAngle = -90f, sweepAngle = 360f * progress, useCenter = false, style = DrawStroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
                                   }
                                   Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                       Text("День", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
@@ -543,7 +544,8 @@ jobs:
                   Spacer(Modifier.height(16.dp))
                   LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                       items(events) { event ->
-                          val isError = event.delta != null && (event.delta!! > 300 || (event.outPpm ?: 0) >= 800)
+                          val delta = event.delta
+                          val isError = delta != null && (delta > 300 || (event.outPpm ?: 0) >= 800)
                           Column(Modifier.fillMaxWidth().background(Surface, RoundedCornerShape(16.dp)).border(1.dp, if (isError) Red else Stroke, RoundedCornerShape(16.dp)).padding(16.dp)) {
                               Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                   Text(
@@ -558,10 +560,10 @@ jobs:
                                   Spacer(Modifier.height(12.dp))
                                   Row(verticalAlignment = Alignment.CenterVertically) {
                                       Text("PPM: ${event.inPpm ?: "-"} → ${event.outPpm ?: "-"}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
-                                      if (event.delta != null) {
+                                      if (delta != null) {
                                           Spacer(Modifier.width(12.dp))
-                                          val deltaColor = when { event.delta > 300 || (event.outPpm ?: 0) >= 800 -> Red; event.delta > 250 -> Yellow; else -> Green }
-                                          Text("Δ ${event.delta}", modifier = Modifier.background(deltaColor, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = OnLime)
+                                          val deltaColor = when { delta > 300 || (event.outPpm ?: 0) >= 800 -> Red; delta > 250 -> Yellow; else -> Green }
+                                          Text("Δ $delta", modifier = Modifier.background(deltaColor, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = OnLime)
                                       }
                                   }
                               }
