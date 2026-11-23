@@ -1,4 +1,4 @@
-name: Build GrowTracker APK
+name: Build GrowTracker APK v2
 on:
   push:
     branches: [ main, master ]
@@ -11,9 +11,631 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Unzip project
-        run: unzip GrowTracker.zip -d ./
-        
+      - name: Generate Project Files
+        run: |
+          rm -rf app src build.gradle.kts settings.gradle.kts gradle.properties GrowTracker.zip
+          mkdir -p app/src/main/java/com/growtracker/app/data
+          mkdir -p app/src/main/java/com/growtracker/app/navigation
+          mkdir -p app/src/main/java/com/growtracker/app/ui/theme
+          mkdir -p app/src/main/java/com/growtracker/app/ui/screens
+          mkdir -p app/src/main/res/values
+
+          cat << 'EOF' > settings.gradle.kts
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "GrowTracker"
+          include(":app")
+          EOF
+
+          cat << 'EOF' > build.gradle.kts
+          plugins {
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+              id("com.google.devtools.ksp") version "2.0.21-1.0.28" apply false
+          }
+          EOF
+
+          cat << 'EOF' > gradle.properties
+          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+          android.useAndroidX=true
+          kotlin.code.style=official
+          android.nonTransitiveRClass=true
+          EOF
+
+          cat << 'EOF' > app/build.gradle.kts
+          plugins {
+              id("com.android.application")
+              id("org.jetbrains.kotlin.android")
+              id("org.jetbrains.kotlin.plugin.compose")
+              id("com.google.devtools.ksp")
+          }
+          android {
+              namespace = "com.growtracker.app"
+              compileSdk = 35
+              defaultConfig {
+                  applicationId = "com.growtracker.app"
+                  minSdk = 26
+                  targetSdk = 35
+                  versionCode = 2
+                  versionName = "2.0"
+              }
+              buildTypes { release { isMinifyEnabled = false } }
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+                  isCoreLibraryDesugaringEnabled = true
+              }
+              kotlinOptions { jvmTarget = "17" }
+              buildFeatures { compose = true }
+          }
+          dependencies {
+              implementation(platform("androidx.compose:compose-bom:2024.12.01"))
+              implementation("androidx.compose.ui:ui")
+              implementation("androidx.compose.ui:ui-graphics")
+              implementation("androidx.compose.ui:ui-tooling-preview")
+              implementation("androidx.compose.material3:material3")
+              implementation("androidx.compose.material:material-icons-extended")
+              implementation("androidx.activity:activity-compose:1.9.3")
+              implementation("androidx.navigation:navigation-compose:2.8.5")
+              implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+              implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+              implementation("androidx.core:core-ktx:1.15.0")
+              implementation("androidx.room:room-runtime:2.6.1")
+              implementation("androidx.room:room-ktx:2.6.1")
+              ksp("androidx.room:room-compiler:2.6.1")
+              coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.3")
+              debugImplementation("androidx.compose.ui:ui-tooling")
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+              <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <application
+                  android:allowBackup="false"
+                  android:label="GrowTracker"
+                  android:supportsRtl="true"
+                  android:theme="@style/Theme.GrowTracker">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:theme="@style/Theme.GrowTracker">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">GrowTracker</string>
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/res/values/themes.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <style name="Theme.GrowTracker" parent="android:Theme.Material.NoActionBar" />
+          </resources>
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/MainActivity.kt
+          package com.growtracker.app
+          import android.graphics.Color
+          import android.os.Bundle
+          import androidx.activity.ComponentActivity
+          import androidx.activity.SystemBarStyle
+          import androidx.activity.compose.setContent
+          import androidx.activity.enableEdgeToEdge
+          import com.growtracker.app.navigation.AppNavigation
+          import com.growtracker.app.ui.theme.GrowTrackerTheme
+          class MainActivity : ComponentActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  enableEdgeToEdge(
+                      statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+                      navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT)
+                  )
+                  setContent {
+                      GrowTrackerTheme {
+                          AppNavigation()
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/data/Entities.kt
+          package com.growtracker.app.data
+          import androidx.room.Entity
+          import androidx.room.PrimaryKey
+          @Entity(tableName = "plants")
+          data class Plant(
+              @PrimaryKey val id: String,
+              val name: String,
+              val genetics: String,
+              val flipDate: String,
+              val colorHex: String
+          )
+          @Entity(tableName = "events")
+          data class Event(
+              @PrimaryKey(autoGenerate = true) val id: Long = 0,
+              val plantId: String,
+              val type: String,
+              val dateTime: String,
+              val inPpm: Int?,
+              val outPpm: Int?,
+              val volumeL: Double?,
+              val note: String?
+          ) {
+              val delta: Int? get() = if (inPpm != null && outPpm != null) outPpm - inPpm else null
+          }
+          @Entity(tableName = "settings")
+          data class Setting(
+              @PrimaryKey val key: String,
+              val value: String
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/data/GrowDao.kt
+          package com.growtracker.app.data
+          import androidx.room.Dao
+          import androidx.room.Insert
+          import androidx.room.Query
+          import kotlinx.coroutines.flow.Flow
+          @Dao
+          interface GrowDao {
+              @Query("SELECT * FROM plants")
+              fun getPlants(): Flow<List<Plant>>
+              @Query("SELECT * FROM events ORDER BY dateTime DESC")
+              fun getEvents(): Flow<List<Event>>
+              @Insert
+              suspend fun insertPlant(plant: Plant)
+              @Insert
+              suspend fun insertEvent(event: Event)
+              @Query("SELECT * FROM settings WHERE key = 'seed_imported'")
+              suspend fun getSeedFlag(): Setting?
+              @Insert
+              suspend fun insertSetting(setting: Setting)
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/data/AppDatabase.kt
+          package com.growtracker.app.data
+          import android.content.Context
+          import androidx.room.Database
+          import androidx.room.Room
+          import androidx.room.RoomDatabase
+          @Database(entities = [Plant::class, Event::class, Setting::class], version = 1, exportSchema = false)
+          abstract class AppDatabase : RoomDatabase() {
+              abstract fun growDao(): GrowDao
+              companion object {
+                  @Volatile private var INSTANCE: AppDatabase? = null
+                  fun getDatabase(context: Context): AppDatabase {
+                      return INSTANCE ?: synchronized(this) {
+                          val instance = Room.databaseBuilder(
+                              context.applicationContext,
+                              AppDatabase::class.java,
+                              "growtracker.db"
+                          ).build()
+                          INSTANCE = instance
+                          instance
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/data/SeedData.kt
+          package com.growtracker.app.data
+          import kotlinx.coroutines.Dispatchers
+          import kotlinx.coroutines.withContext
+          object SeedData {
+              suspend fun populate(db: AppDatabase) = withContext(Dispatchers.IO) {
+                  val dao = db.growDao()
+                  if (dao.getSeedFlag() != null) return@withContext
+                  val big = Plant("plant_big", "Большой", "Сатива", "2026-10-04", "#B4F000")
+                  val small = Plant("plant_small", "Малый", "Индика", "2026-10-06", "#8B7BF7")
+                  dao.insertPlant(big)
+                  dao.insertPlant(small)
+                  dao.insertEvent(Event(plantId="plant_small", type="water", dateTime="2026-09-15T10:00:00", inPpm=null, outPpm=null, volumeL=2.0, note="Перелив. Начал чахнуть."))
+                  dao.insertEvent(Event(plantId="plant_big", type="water", dateTime="2026-09-17T10:00:00", inPpm=620, outPpm=920, volumeL=2.0, note="TriPart + CalMag + Taste"))
+                  dao.insertEvent(Event(plantId="plant_small", type="water", dateTime="2026-09-22T10:00:00", inPpm=449, outPpm=742, volumeL=1.0, note="TriPart + Taste"))
+                  dao.insertEvent(Event(plantId="plant_big", type="flip", dateTime="2026-10-04T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Перевод на 12/12"))
+                  dao.insertEvent(Event(plantId="plant_small", type="flip", dateTime="2026-10-06T10:00:00", inPpm=null, outPpm=null, volumeL=null, note="Перевод на 12/12"))
+                  dao.insertEvent(Event(plantId="plant_big", type="water", dateTime="2026-11-15T10:00:00", inPpm=460, outPpm=920, volumeL=2.0, note="TriPart + Atami (1.4 л + 0.6 л)"))
+                  dao.insertEvent(Event(plantId="plant_big", type="flush", dateTime="2026-11-19T10:00:00", inPpm=170, outPpm=830, volumeL=2.0, note="Промывка 1"))
+                  dao.insertEvent(Event(plantId="plant_small", type="feed", dateTime="2026-11-22T10:00:00", inPpm=676, outPpm=749, volumeL=1.5, note="TriPart + Delta 9, pH 6.5"))
+                  dao.insertSetting(Setting("seed_imported", "true"))
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/MainViewModel.kt
+          package com.growtracker.app.ui
+          import android.app.Application
+          import androidx.lifecycle.AndroidViewModel
+          import androidx.lifecycle.viewModelScope
+          import com.growtracker.app.data.AppDatabase
+          import com.growtracker.app.data.SeedData
+          import kotlinx.coroutines.flow.SharingStarted
+          import kotlinx.coroutines.flow.stateIn
+          import kotlinx.coroutines.launch
+          class MainViewModel(app: Application) : AndroidViewModel(app) {
+              private val db = AppDatabase.getDatabase(app)
+              private val dao = db.growDao()
+              val plants = dao.getPlants().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+              val events = dao.getEvents().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+              init {
+                  viewModelScope.launch { SeedData.populate(db) }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/theme/Color.kt
+          package com.growtracker.app.ui.theme
+          import androidx.compose.ui.graphics.Color
+          val Bg = Color(0xFF141414)
+          val BgGlow = Color(0x2EB4F000)
+          val Surface = Color(0xFF1E1E1E)
+          val Surface2 = Color(0xFF262626)
+          val Stroke = Color(0xFF333333)
+          val TextPrimary = Color(0xFFFFFFFF)
+          val TextSecondary = Color(0xFF8C8C8C)
+          val Lime = Color(0xFFB4F000)
+          val OnLime = Color(0xFF141414)
+          val Green = Color(0xFF7ED957)
+          val Yellow = Color(0xFFF7C948)
+          val Purple = Color(0xFF8B7BF7)
+          val Red = Color(0xFFFF5A5A)
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/theme/Type.kt
+          package com.growtracker.app.ui.theme
+          import androidx.compose.material3.Typography
+          import androidx.compose.ui.text.TextStyle
+          import androidx.compose.ui.text.font.FontFamily
+          import androidx.compose.ui.text.font.FontWeight
+          import androidx.compose.ui.unit.sp
+          val AppTypography = Typography(
+              displayLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 34.sp, lineHeight = 40.sp),
+              headlineLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 30.sp, lineHeight = 36.sp),
+              headlineMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Black, fontSize = 22.sp, lineHeight = 28.sp),
+              titleLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+              bodyLarge = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 16.sp),
+              bodyMedium = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Normal, fontSize = 14.sp),
+              labelSmall = TextStyle(fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Medium, fontSize = 12.sp)
+          )
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/theme/Theme.kt
+          package com.growtracker.app.ui.theme
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.darkColorScheme
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Brush
+          import androidx.compose.ui.graphics.Color
+          private val DarkColorScheme = darkColorScheme(
+              primary = Lime, onPrimary = OnLime, background = Bg, onBackground = TextPrimary,
+              surface = Surface, onSurface = TextPrimary, surfaceVariant = Surface2,
+              outline = Stroke, error = Red, secondary = Purple, tertiary = Yellow
+          )
+          @Composable
+          fun GrowTrackerTheme(content: @Composable () -> Unit) {
+              MaterialTheme(colorScheme = DarkColorScheme, typography = AppTypography) {
+                  Box(
+                      modifier = Modifier.fillMaxSize()
+                          .background(Brush.radialGradient(colors = listOf(BgGlow, Color.Transparent), radius = 800f))
+                          .background(Bg)
+                  ) { content() }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/navigation/AppNavigation.kt
+          package com.growtracker.app.navigation
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material.icons.Icons
+          import androidx.compose.material.icons.outlined.BarChart
+          import androidx.compose.material.icons.outlined.CalendarToday
+          import androidx.compose.material.icons.outlined.Home
+          import androidx.compose.material.icons.outlined.List
+          import androidx.compose.material.icons.outlined.Settings
+          import androidx.compose.material3.Icon
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.NavigationBar
+          import androidx.compose.material3.NavigationBarItem
+          import androidx.compose.material3.NavigationBarItemDefaults
+          import androidx.compose.material3.Scaffold
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.getValue
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.vector.ImageVector
+          import androidx.lifecycle.viewmodel.compose.viewModel
+          import androidx.navigation.NavDestination.Companion.hierarchy
+          import androidx.navigation.NavGraph.Companion.findStartDestination
+          import androidx.navigation.compose.NavHost
+          import androidx.navigation.compose.composable
+          import androidx.navigation.compose.currentBackStackEntryAsState
+          import androidx.navigation.compose.rememberNavController
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.screens.*
+          import com.growtracker.app.ui.theme.Lime
+          import com.growtracker.app.ui.theme.OnLime
+          sealed class Screen(val route: String, val label: String, val icon: ImageVector) {
+              data object Home : Screen("home", "Главная", Icons.Outlined.Home)
+              data object Journal : Screen("journal", "Журнал", Icons.Outlined.List)
+              data object Calendar : Screen("calendar", "Календарь", Icons.Outlined.CalendarToday)
+              data object Charts : Screen("charts", "Графики", Icons.Outlined.BarChart)
+              data object Menu : Screen("menu", "Меню", Icons.Outlined.Settings)
+          }
+          @Composable
+          fun AppNavigation() {
+              val navController = rememberNavController()
+              val items = listOf(Screen.Home, Screen.Journal, Screen.Calendar, Screen.Charts, Screen.Menu)
+              val viewModel: MainViewModel = viewModel()
+              Scaffold(
+                  bottomBar = {
+                      NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                          val navBackStackEntry by navController.currentBackStackEntryAsState()
+                          val currentDestination = navBackStackEntry?.destination
+                          items.forEach { screen ->
+                              NavigationBarItem(
+                                  icon = { Icon(screen.icon, contentDescription = screen.label) },
+                                  label = { Text(screen.label) },
+                                  selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                                  onClick = {
+                                      navController.navigate(screen.route) {
+                                          popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                                          launchSingleTop = true
+                                          restoreState = true
+                                      }
+                                  },
+                                  colors = NavigationBarItemDefaults.colors(
+                                      selectedIconColor = OnLime, selectedTextColor = Lime,
+                                      indicatorColor = Lime, unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                      unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                  )
+                              )
+                          }
+                      }
+                  }
+              ) { innerPadding ->
+                  NavHost(navController = navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
+                      composable(Screen.Home.route) { HomeScreen(viewModel) }
+                      composable(Screen.Journal.route) { JournalScreen(viewModel) }
+                      composable(Screen.Calendar.route) { CalendarScreen() }
+                      composable(Screen.Charts.route) { ChartsScreen() }
+                      composable(Screen.Menu.route) { MenuScreen() }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/HomeScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.Canvas
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyRow
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.StrokeCap
+          import androidx.compose.ui.graphics.drawscope.Stroke
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
+          import java.time.LocalDate
+          import java.time.temporal.ChronoUnit
+          @Composable
+          fun HomeScreen(viewModel: MainViewModel) {
+              val plants by viewModel.plants.collectAsState()
+              val events by viewModel.events.collectAsState()
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+                  Text("ГЛАВНАЯ", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  val lastEvent = events.firstOrNull { it.delta != null && it.plantId == "plant_big" }
+                  if (lastEvent != null) {
+                      val deltaColor = when {
+                          lastEvent.delta!! > 300 || lastEvent.outPpm!! >= 800 -> Red
+                          lastEvent.delta!! > 250 -> Yellow
+                          else -> Green
+                      }
+                      Column(Modifier.fillMaxWidth().background(deltaColor, RoundedCornerShape(20.dp)).padding(16.dp)) {
+                          Text("ДЕЛЬТА ПОСЛЕДНЕГО ПОЛИВА (БОЛЬШОЙ)", style = MaterialTheme.typography.labelSmall, color = OnLime)
+                          Spacer(Modifier.height(4.dp))
+                          Text("+${lastEvent.delta} PPM", style = MaterialTheme.typography.headlineLarge, color = OnLime)
+                          Text("Вход: ${lastEvent.inPpm} → Выход: ${lastEvent.outPpm}", style = MaterialTheme.typography.bodyMedium, color = OnLime)
+                      }
+                      Spacer(Modifier.height(16.dp))
+                  }
+                  Text("РАСТЕНИЯ", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+                  Spacer(Modifier.height(8.dp))
+                  LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                      items(plants) { plant ->
+                          Column(Modifier.width(160.dp).background(Surface, RoundedCornerShape(20.dp)).border(1.dp, Stroke, RoundedCornerShape(20.dp)).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                              val today = LocalDate.now()
+                              val flip = LocalDate.parse(plant.flipDate)
+                              val daysInFlower = ChronoUnit.DAYS.between(flip, today).toInt().coerceAtLeast(0)
+                              val progress = (daysInFlower.toFloat() / 84).coerceIn(0f, 1f)
+                              Box(contentAlignment = Alignment.Center, modifier = Modifier.size(100.dp)) {
+                                  Canvas(modifier = Modifier.size(100.dp)) {
+                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)).copy(alpha = 0.2f), startAngle = -90f, sweepAngle = 360f, useCenter = false, style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
+                                      drawArc(color = Color(android.graphics.Color.parseColor(plant.colorHex)), startAngle = -90f, sweepAngle = 360f * progress, useCenter = false, style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round))
+                                  }
+                                  Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                      Text("День", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                                      Text("$daysInFlower", style = MaterialTheme.typography.headlineMedium, color = TextPrimary)
+                                  }
+                              }
+                              Spacer(Modifier.height(12.dp))
+                              Text(plant.name, style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                              Text(plant.genetics, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/JournalScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.border
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
+          import java.time.LocalDateTime
+          import java.time.format.DateTimeFormatter
+          @Composable
+          fun JournalScreen(viewModel: MainViewModel) {
+              val events by viewModel.events.collectAsState()
+              val formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm")
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
+                  Text("ЖУРНАЛ", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                      items(events) { event ->
+                          val isError = event.delta != null && (event.delta!! > 300 || (event.outPpm ?: 0) >= 800)
+                          Column(Modifier.fillMaxWidth().background(Surface, RoundedCornerShape(16.dp)).border(1.dp, if (isError) Red else Stroke, RoundedCornerShape(16.dp)).padding(16.dp)) {
+                              Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                  Text(
+                                      text = when(event.type) { "water" -> "💧 Полив"; "feed" -> "🧪 Компот"; "flush" -> "🚿 Промывка"; "flip" -> "🔄 Флип"; "spray" -> "💨 Опрыскивание"; else -> event.type },
+                                      style = MaterialTheme.typography.titleLarge, color = if (isError) Red else TextPrimary
+                                  )
+                                  Text(event.plantId.replace("plant_", "").replaceFirstChar { it.uppercase() }, color = if (event.plantId == "plant_big") Lime else Purple)
+                              }
+                              Spacer(Modifier.height(8.dp))
+                              Text(LocalDateTime.parse(event.dateTime).format(formatter), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                              if (event.inPpm != null || event.outPpm != null) {
+                                  Spacer(Modifier.height(12.dp))
+                                  Row(verticalAlignment = Alignment.CenterVertically) {
+                                      Text("PPM: ${event.inPpm ?: "-"} → ${event.outPpm ?: "-"}", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                                      if (event.delta != null) {
+                                          Spacer(Modifier.width(12.dp))
+                                          val deltaColor = when { event.delta > 300 || (event.outPpm ?: 0) >= 800 -> Red; event.delta > 250 -> Yellow; else -> Green }
+                                          Text("Δ ${event.delta}", modifier = Modifier.background(deltaColor, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall, color = OnLime)
+                                      }
+                                  }
+                              }
+                              if (!event.note.isNullOrBlank()) {
+                                  Spacer(Modifier.height(8.dp))
+                                  Text(event.note, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/CalendarScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.theme.Lime
+          @Composable
+          fun CalendarScreen() {
+              Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.TopStart) {
+                  Text("КАЛЕНДАРЬ", style = MaterialTheme.typography.displayLarge, color = Lime)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/ChartsScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.theme.Lime
+          @Composable
+          fun ChartsScreen() {
+              Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.TopStart) {
+                  Text("ГРАФИКИ", style = MaterialTheme.typography.displayLarge, color = Lime)
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/MenuScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.layout.Box
+          import androidx.compose.foundation.layout.fillMaxSize
+          import androidx.compose.foundation.layout.padding
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.ui.Alignment
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.theme.Lime
+          @Composable
+          fun MenuScreen() {
+              Box(Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.TopStart) {
+                  Text("МЕНЮ", style = MaterialTheme.typography.displayLarge, color = Lime)
+              }
+          }
+          EOF
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -26,12 +648,10 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build Debug APK
-        run: |
-          cd GrowTracker
-          gradle assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GrowTracker-APK
-          path: GrowTracker/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
