@@ -1,4 +1,4 @@
-name: Build GrowTracker APK v5
+name: Build GrowTracker APK v10
 on:
   push:
     branches: [ main, master ]
@@ -18,6 +18,7 @@ jobs:
           mkdir -p app/src/main/java/com/growtracker/app/navigation
           mkdir -p app/src/main/java/com/growtracker/app/ui/theme
           mkdir -p app/src/main/java/com/growtracker/app/ui/screens
+          mkdir -p app/src/main/java/com/growtracker/app/ui/components
           mkdir -p app/src/main/res/values
 
           cat << 'EOF' > settings.gradle.kts
@@ -69,8 +70,8 @@ jobs:
                   applicationId = "com.growtracker.app"
                   minSdk = 26
                   targetSdk = 35
-                  versionCode = 5
-                  versionName = "5.0"
+                  versionCode = 10
+                  versionName = "10.0"
               }
               buildTypes { release { isMinifyEnabled = false } }
               compileOptions {
@@ -150,38 +151,19 @@ jobs:
           import androidx.room.Entity
           import androidx.room.PrimaryKey
           @Entity(tableName = "plants")
-          data class Plant(
-              @PrimaryKey(autoGenerate = true) val id: Long = 0,
-              val name: String,
-              val genetics: String,
-              val potLiters: Double,
-              val flipDate: String,
-              val colorHex: String
-          )
+          data class Plant(@PrimaryKey(autoGenerate = true) val id: Long = 0, val name: String, val genetics: String, val potLiters: Double, val flipDate: String, val colorHex: String)
           @Entity(tableName = "fertilizers")
-          data class Fertilizer(
-              @PrimaryKey(autoGenerate = true) val id: Long = 0,
-              val name: String,
-              val category: String,
-              val defaultDose: Double
-          )
+          data class Fertilizer(@PrimaryKey(autoGenerate = true) val id: Long = 0, val name: String, val category: String, val defaultDose: Double, val ppmPerMl: Double)
           @Entity(tableName = "events")
-          data class Event(
-              @PrimaryKey(autoGenerate = true) val id: Long = 0,
-              val plantId: Long,
-              val type: String,
-              val dateTime: String,
-              val inPpm: Int?,
-              val outPpm: Int?,
-              val volumeL: Double?,
-              val note: String?
-          ) { val delta: Int? get() = if (inPpm != null && outPpm != null) outPpm - inPpm else null }
+          data class Event(@PrimaryKey(autoGenerate = true) val id: Long = 0, val plantId: Long, val type: String, val dateTime: String, val inPpm: Int?, val outPpm: Int?, val volumeL: Double?, val note: String?) {
+              val delta: Int? get() = if (inPpm != null && outPpm != null) outPpm - inPpm else null
+          }
           @Entity(tableName = "event_fertilizers", primaryKeys = ["eventId", "fertilizerId"])
-          data class EventFertilizer(
-              val eventId: Long,
-              val fertilizerId: Long,
-              val dose: Double
-          )
+          data class EventFertilizer(val eventId: Long, val fertilizerId: Long, val dose: Double)
+          @Entity(tableName = "diary_notes")
+          data class DiaryNote(@PrimaryKey(autoGenerate = true) val id: Long = 0, val plantId: Long, val text: String, val tags: String, val isError: Boolean, val dateTime: String)
+          @Entity(tableName = "settings")
+          data class Setting(@PrimaryKey val key: String, val value: String)
           EOF
 
           cat << 'EOF' > app/src/main/java/com/growtracker/app/data/GrowDao.kt
@@ -193,12 +175,15 @@ jobs:
               @Query("SELECT * FROM plants") fun getPlants(): Flow<List<Plant>>
               @Query("SELECT * FROM fertilizers") fun getFertilizers(): Flow<List<Fertilizer>>
               @Query("SELECT * FROM events ORDER BY dateTime DESC") fun getEvents(): Flow<List<Event>>
-              @Query("SELECT * FROM event_fertilizers WHERE eventId = :eventId") suspend fun getEventFerts(eventId: Long): List<EventFertilizer>
-              @Query("SELECT * FROM fertilizers WHERE id = :id") suspend fun getFert(id: Long): Fertilizer?
+              @Query("SELECT * FROM diary_notes ORDER BY dateTime DESC") fun getDiaryNotes(): Flow<List<DiaryNote>>
+              @Query("SELECT * FROM settings WHERE key = 'tds_scale'") suspend fun getTdsScale(): Setting?
+              @Query("SELECT * FROM settings WHERE key = 'seed'") suspend fun getSeedFlag(): Setting?
               @Insert suspend fun insertPlant(plant: Plant): Long
               @Insert suspend fun insertFertilizer(fert: Fertilizer): Long
               @Insert suspend fun insertEvent(event: Event): Long
               @Insert suspend fun insertEventFert(crossRef: EventFertilizer)
+              @Insert suspend fun insertDiaryNote(note: DiaryNote)
+              @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun insertSetting(setting: Setting)
           }
           EOF
 
@@ -208,7 +193,7 @@ jobs:
           import androidx.room.Database
           import androidx.room.Room
           import androidx.room.RoomDatabase
-          @Database(entities = [Plant::class, Fertilizer::class, Event::class, EventFertilizer::class], version = 1, exportSchema = false)
+          @Database(entities = [Plant::class, Fertilizer::class, Event::class, EventFertilizer::class, DiaryNote::class, Setting::class], version = 1, exportSchema = false)
           abstract class AppDatabase : RoomDatabase() {
               abstract fun growDao(): GrowDao
               companion object {
@@ -231,20 +216,23 @@ jobs:
           object SeedData {
               suspend fun populate(db: AppDatabase) = withContext(Dispatchers.IO) {
                   val dao = db.growDao()
+                  if (dao.getSeedFlag() != null) return@withContext
                   val pBig = dao.insertPlant(Plant(name="Большой", genetics="Сатива", potLiters=15.0, flipDate="2026-10-04", colorHex="#B4F000"))
                   val pSmall = dao.insertPlant(Plant(name="Малый", genetics="Индика", potLiters=10.0, flipDate="2026-10-06", colorHex="#8B7BF7"))
                   
-                  dao.insertFertilizer(Fertilizer(name="TriPart Micro", category="База", defaultDose=1.0))
-                  dao.insertFertilizer(Fertilizer(name="TriPart Grow", category="База", defaultDose=1.0))
-                  dao.insertFertilizer(Fertilizer(name="TriPart Bloom", category="База", defaultDose=1.0))
-                  dao.insertFertilizer(Fertilizer(name="Atami B'cuzz", category="Стимуляторы", defaultDose=1.0))
-                  dao.insertFertilizer(Fertilizer(name="CalMag", category="Добавки", defaultDose=0.5))
-                  dao.insertFertilizer(Fertilizer(name="Delta 9", category="Стимуляторы", defaultDose=1.0))
+                  dao.insertFertilizer(Fertilizer(name="TriPart Micro", category="База", defaultDose=1.0, ppmPerMl=100.0))
+                  dao.insertFertilizer(Fertilizer(name="TriPart Grow", category="База", defaultDose=1.0, ppmPerMl=100.0))
+                  dao.insertFertilizer(Fertilizer(name="TriPart Bloom", category="База", defaultDose=1.0, ppmPerMl=100.0))
+                  dao.insertFertilizer(Fertilizer(name="Atami B'cuzz", category="Стимуляторы", defaultDose=1.0, ppmPerMl=20.0))
+                  dao.insertFertilizer(Fertilizer(name="CalMag", category="Добавки", defaultDose=0.5, ppmPerMl=50.0))
 
                   dao.insertEvent(Event(plantId=pSmall, type="water", dateTime="2026-09-15T10:00:00", inPpm=null, outPpm=null, volumeL=2.0, note="Перелив. Начал чахнуть."))
                   dao.insertEvent(Event(plantId=pBig, type="water", dateTime="2026-09-17T10:00:00", inPpm=620, outPpm=920, volumeL=2.0, note="TriPart + CalMag + Taste"))
                   dao.insertEvent(Event(plantId=pBig, type="water", dateTime="2026-11-15T10:00:00", inPpm=460, outPpm=920, volumeL=2.0, note="TriPart + Atami"))
                   dao.insertEvent(Event(plantId=pBig, type="feed", dateTime="2026-11-19T10:00:00", inPpm=170, outPpm=830, volumeL=2.0, note="Промывка"))
+                  
+                  dao.insertSetting(Setting("tds_scale", "500"))
+                  dao.insertSetting(Setting("seed", "true"))
               }
           }
           EOF
@@ -263,9 +251,14 @@ jobs:
               val plants = dao.getPlants().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
               val fertilizers = dao.getFertilizers().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
               val events = dao.getEvents().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+              val diaryNotes = dao.getDiaryNotes().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+              
               init { viewModelScope.launch { SeedData.populate(AppDatabase.getDatabase(getApplication())) } }
+              
               fun addPlant(plant: Plant) = viewModelScope.launch { dao.insertPlant(plant) }
               fun addFertilizer(fert: Fertilizer) = viewModelScope.launch { dao.insertFertilizer(fert) }
+              fun addDiaryNote(note: DiaryNote) = viewModelScope.launch { dao.insertDiaryNote(note) }
+              fun saveSetting(key: String, value: String) = viewModelScope.launch { dao.insertSetting(Setting(key, value)) }
               fun addEvent(event: Event, ferts: List<Pair<Long, Double>>) = viewModelScope.launch {
                   val id = dao.insertEvent(event)
                   ferts.forEach { dao.insertEventFert(EventFertilizer(id, it.first, it.second)) }
@@ -454,36 +447,24 @@ jobs:
               val plants by viewModel.plants.collectAsState()
               var currentMonth by remember { mutableStateOf(YearMonth.now()) }
               var selectedDate by remember { mutableStateOf(LocalDate.now()) }
-
               Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
                   Text("КАЛЕНДАРЬ", style = MaterialTheme.typography.displayLarge, color = Lime)
                   Spacer(Modifier.height(16.dp))
-
                   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                      IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) {
-                          Text("<", color = Lime, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                      }
-                      Text(
-                          currentMonth.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))).uppercase(Locale("ru")),
-                          style = MaterialTheme.typography.titleLarge, color = TextPrimary
-                      )
-                      IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) {
-                          Text(">", color = Lime, fontSize = 24.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                      }
+                      IconButton(onClick = { currentMonth = currentMonth.minusMonths(1) }) { Text("<", color = Lime, fontSize = 24.sp) }
+                      Text(currentMonth.format(DateTimeFormatter.ofPattern("LLLL yyyy", Locale("ru"))).uppercase(Locale("ru")), style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                      IconButton(onClick = { currentMonth = currentMonth.plusMonths(1) }) { Text(">", color = Lime, fontSize = 24.sp) }
                   }
                   Spacer(Modifier.height(16.dp))
-
                   Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
                       listOf("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс").forEach {
                           Text(it, color = TextSecondary, modifier = Modifier.width(36.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall)
                       }
                   }
                   Spacer(Modifier.height(8.dp))
-
                   val firstDay = currentMonth.atDay(1).dayOfWeek.value 
                   val daysInMonth = currentMonth.lengthOfMonth()
                   var dayCounter = 1
-
                   for (week in 0..5) {
                       if (dayCounter > daysInMonth) break
                       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
@@ -494,28 +475,13 @@ jobs:
                                   val date = currentMonth.atDay(dayCounter)
                                   val isSelected = date == selectedDate
                                   val hasEvents = events.any { LocalDateTime.parse(it.dateTime).toLocalDate() == date }
-                                  
-                                  Box(
-                                      modifier = Modifier.width(36.dp).height(48.dp).clickable { selectedDate = date },
-                                      contentAlignment = Alignment.Center
-                                  ) {
+                                  Box(modifier = Modifier.width(36.dp).height(48.dp).clickable { selectedDate = date }, contentAlignment = Alignment.Center) {
                                       Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                          Box(
-                                              modifier = Modifier.size(32.dp).background(if (isSelected) Lime else Color.Transparent, CircleShape),
-                                              contentAlignment = Alignment.Center
-                                          ) {
-                                              Text(
-                                                  text = dayCounter.toString(),
-                                                  color = if (isSelected) OnLime else TextPrimary,
-                                                  style = MaterialTheme.typography.bodyMedium
-                                              )
+                                          Box(modifier = Modifier.size(32.dp).background(if (isSelected) Lime else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
+                                              Text(dayCounter.toString(), color = if (isSelected) OnLime else TextPrimary, style = MaterialTheme.typography.bodyMedium)
                                           }
                                           Spacer(Modifier.height(4.dp))
-                                          if (hasEvents) {
-                                              Box(Modifier.size(4.dp).background(if (isSelected) OnLime else Lime, CircleShape))
-                                          } else {
-                                              Spacer(Modifier.height(4.dp))
-                                          }
+                                          if (hasEvents) Box(Modifier.size(4.dp).background(if (isSelected) OnLime else Lime, CircleShape)) else Spacer(Modifier.height(4.dp))
                                       }
                                   }
                                   dayCounter++
@@ -525,11 +491,9 @@ jobs:
                           }
                       }
                   }
-
                   Spacer(Modifier.height(16.dp))
                   Box(Modifier.fillMaxWidth().height(1.dp).background(Stroke))
                   Spacer(Modifier.height(16.dp))
-
                   val dayEvents = events.filter { LocalDateTime.parse(it.dateTime).toLocalDate() == selectedDate }
                   if (dayEvents.isEmpty()) {
                       Text("Нет событий в этот день", color = TextSecondary)
@@ -554,18 +518,118 @@ jobs:
 
           cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/ChartsScreen.kt
           package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.Canvas
           import androidx.compose.foundation.layout.*
           import androidx.compose.material3.MaterialTheme
           import androidx.compose.material3.Text
           import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
           import androidx.compose.ui.Modifier
+          import androidx.compose.ui.geometry.Offset
+          import androidx.compose.ui.graphics.Color
+          import androidx.compose.ui.graphics.Path
+          import androidx.compose.ui.graphics.StrokeCap
+          import androidx.compose.ui.graphics.drawscope.Stroke
           import androidx.compose.ui.unit.dp
-          import com.growtracker.app.ui.theme.Lime
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
           @Composable
-          fun ChartsScreen() {
+          fun ChartsScreen(viewModel: MainViewModel) {
+              val events by viewModel.events.collectAsState()
+              val data = events.filter { it.inPpm != null && it.outPpm != null }.reversed()
               Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
                   Text("ГРАФИКИ", style = MaterialTheme.typography.displayLarge, color = Lime)
-                  Text("В разработке...", color = MaterialTheme.colorScheme.onBackground)
+                  Spacer(Modifier.height(16.dp))
+                  Text("График PPM (Вход/Выход)", color = TextPrimary, style = MaterialTheme.typography.titleLarge)
+                  Spacer(Modifier.height(16.dp))
+                  if (data.isNotEmpty()) {
+                      val maxPpm = data.maxOf { maxOf(it.inPpm!!, it.outPpm!!) }.coerceAtLeast(500).toFloat()
+                      Canvas(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+                          val stepX = size.width / (data.size.coerceAtLeast(2) - 1)
+                          val inPath = Path()
+                          val outPath = Path()
+                          data.forEachIndexed { i, ev ->
+                              val x = i * stepX
+                              val yIn = size.height - (ev.inPpm!! / maxPpm) * size.height
+                              val yOut = size.height - (ev.outPpm!! / maxPpm) * size.height
+                              if (i == 0) { inPath.moveTo(x, yIn); outPath.moveTo(x, yOut) }
+                              else { inPath.lineTo(x, yIn); outPath.lineTo(x, yOut) }
+                              // точки
+                              drawCircle(color = Lime, radius = 6f, center = Offset(x, yIn))
+                              drawCircle(color = Red, radius = 6f, center = Offset(x, yOut))
+                          }
+                          drawPath(inPath, color = Lime, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                          drawPath(outPath, color = Red, style = Stroke(width = 4f, cap = StrokeCap.Round))
+                      }
+                      Spacer(Modifier.height(16.dp))
+                      Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                          Text("— Вход (PPM)", color = Lime)
+                          Text("— Выход (PPM)", color = Red)
+                      }
+                  } else {
+                      Text("Нет данных для графика", color = TextSecondary)
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/CalculatorScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
+          @Composable
+          fun CalculatorScreen(viewModel: MainViewModel) {
+              val ferts by viewModel.fertilizers.collectAsState()
+              var targetPpm by remember { mutableStateOf("800") }
+              var waterPpm by remember { mutableStateOf("240") }
+              var volume by remember { mutableStateOf("10") }
+
+              val target = targetPpm.toIntOrNull() ?: 0
+              val water = waterPpm.toIntOrNull() ?: 0
+              val vol = volume.toDoubleOrNull() ?: 0.0
+              val diff = (target - water).coerceAtLeast(0)
+              val totalPpmPerMl = ferts.sumOf { it.ppmPerMl }
+              val doseMultiplier = if (totalPpmPerMl > 0) diff / totalPpmPerMl else 0.0
+
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState())) {
+                  Text("КАЛЬКУЛЯТОР", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  OutlinedTextField(value = targetPpm, onValueChange = { targetPpm = it }, label = { Text("Целевой PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                  Spacer(Modifier.height(8.dp))
+                  OutlinedTextField(value = waterPpm, onValueChange = { waterPpm = it }, label = { Text("PPM Воды") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                  Spacer(Modifier.height(8.dp))
+                  OutlinedTextField(value = volume, onValueChange = { volume = it }, label = { Text("Объем (л)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                  
+                  Spacer(Modifier.height(24.dp))
+                  Text("Расчет мл на $volume л:", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                  Spacer(Modifier.height(8.dp))
+                  
+                  ferts.forEach { fert ->
+                      val totalMl = doseMultiplier * fert.ppmPerMl * vol
+                      Column(Modifier.fillMaxWidth().background(Surface, RoundedCornerShape(8.dp)).padding(12.dp).padding(bottom = 8.dp)) {
+                          Text(fert.name, color = Lime, style = MaterialTheme.typography.titleLarge)
+                          Text("Влить: ${String.format("%.1f", totalMl)} мл (${String.format("%.2f", doseMultiplier * fert.ppmPerMl)} мл/л)", color = TextPrimary)
+                      }
+                      Spacer(Modifier.height(8.dp))
+                  }
+                  
+                  Spacer(Modifier.height(24.dp))
+                  Text("Порядок смешивания:", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
+                  listOf("Кремний", "CalMag", "TriPart Micro", "TriPart Grow", "TriPart Bloom", "Стимуляторы").forEachIndexed { i, step ->
+                      Text("${i+1}. $step", color = TextSecondary, modifier = Modifier.padding(vertical = 4.dp))
+                  }
               }
           }
           EOF
@@ -577,125 +641,143 @@ jobs:
           import androidx.compose.runtime.*
           import androidx.compose.ui.Modifier
           import androidx.compose.ui.unit.dp
+          import com.growtracker.app.data.DiaryNote
           import com.growtracker.app.data.Fertilizer
           import com.growtracker.app.data.Plant
           import com.growtracker.app.ui.MainViewModel
           import com.growtracker.app.ui.theme.Lime
+          import java.time.LocalDateTime
+          import java.time.format.DateTimeFormatter
           @Composable
-          fun MenuScreen(viewModel: MainViewModel) {
+          fun MenuScreen(viewModel: MainViewModel, onNavigateAi: () -> Unit, onNavigateDiary: () -> Unit) {
               var showPlantDialog by remember { mutableStateOf(false) }
               var showFertDialog by remember { mutableStateOf(false) }
-              Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
-                  Text("МЕНЮ / НАСТРОЙКИ", style = MaterialTheme.typography.displayLarge, color = Lime)
+              var showNoteDialog by remember { mutableStateOf(false) }
+              val plants by viewModel.plants.collectAsState()
+
+              Column(modifier = Modifier.fillMaxSize().padding(20.dp).padding(top = 40.dp)) {
+                  Text("МЕНЮ", style = MaterialTheme.typography.displayLarge, color = Lime)
                   Spacer(Modifier.height(20.dp))
                   Button(onClick = { showPlantDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Добавить Растение") }
                   Spacer(Modifier.height(10.dp))
                   Button(onClick = { showFertDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Добавить Удобрение") }
+                  Spacer(Modifier.height(10.dp))
+                  Button(onClick = { showNoteDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("Записать в Дневник") }
+                  Spacer(Modifier.height(10.dp))
+                  Button(onClick = onNavigateAi, modifier = Modifier.fillMaxWidth()) { Text("ИИ-Ассистент") }
+                  Spacer(Modifier.height(10.dp))
+                  Button(onClick = onNavigateDiary, modifier = Modifier.fillMaxWidth()) { Text("Дневник ошибок") }
               }
+              // Диалоги создания...
               if (showPlantDialog) {
                   var name by remember { mutableStateOf("") }
-                  var genetics by remember { mutableStateOf("") }
-                  var pot by remember { mutableStateOf("") }
                   AlertDialog(
                       onDismissRequest = { showPlantDialog = false },
                       title = { Text("Новое растение") },
-                      text = {
-                          Column {
-                              OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Имя") })
-                              OutlinedTextField(value = genetics, onValueChange = { genetics = it }, label = { Text("Генетика") })
-                              OutlinedTextField(value = pot, onValueChange = { pot = it }, label = { Text("Объем (л)") })
-                          }
-                      },
-                      confirmButton = { Button(onClick = { viewModel.addPlant(Plant(name=name, genetics=genetics, potLiters=pot.toDoubleOrNull() ?: 10.0, flipDate="2026-10-01", colorHex="#B4F000")); showPlantDialog = false }) { Text("ОК") } }
+                      text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Имя") }) },
+                      confirmButton = { Button(onClick = { viewModel.addPlant(Plant(name=name, genetics="Гибрид", potLiters=10.0, flipDate="2026-10-01", colorHex="#B4F000")); showPlantDialog = false }) { Text("ОК") } }
                   )
               }
               if (showFertDialog) {
                   var name by remember { mutableStateOf("") }
-                  var cat by remember { mutableStateOf("База") }
                   AlertDialog(
                       onDismissRequest = { showFertDialog = false },
                       title = { Text("Новое удобрение") },
-                      text = {
-                          Column {
-                              OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Название") })
-                              OutlinedTextField(value = cat, onValueChange = { cat = it }, label = { Text("Категория") })
-                          }
-                      },
-                      confirmButton = { Button(onClick = { viewModel.addFertilizer(Fertilizer(name=name, category=cat, defaultDose=1.0)); showFertDialog = false }) { Text("ОК") } }
+                      text = { OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Название") }) },
+                      confirmButton = { Button(onClick = { viewModel.addFertilizer(Fertilizer(name=name, category="База", defaultDose=1.0, ppmPerMl=100.0)); showFertDialog = false }) { Text("ОК") } }
+                  )
+              }
+              if (showNoteDialog) {
+                  var text by remember { mutableStateOf("") }
+                  AlertDialog(
+                      onDismissRequest = { showNoteDialog = false },
+                      title = { Text("Дневник") },
+                      text = { OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Симптомы...") }) },
+                      confirmButton = { Button(onClick = { 
+                          val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                          viewModel.addDiaryNote(DiaryNote(plantId=plants.firstOrNull()?.id ?: 1, text=text, tags="", isError=true, dateTime=now))
+                          showNoteDialog = false 
+                      }) { Text("ОК") } }
                   )
               }
           }
           EOF
 
-          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/AddEventDialog.kt
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/DiaryScreen.kt
           package com.growtracker.app.ui.screens
-          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.background
           import androidx.compose.foundation.layout.*
-          import androidx.compose.foundation.rememberScrollState
-          import androidx.compose.foundation.verticalScroll
-          import androidx.compose.material3.*
-          import androidx.compose.runtime.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.MaterialTheme
+          import androidx.compose.material3.Text
+          import androidx.compose.runtime.Composable
+          import androidx.compose.runtime.collectAsState
+          import androidx.compose.runtime.getValue
           import androidx.compose.ui.Modifier
-          import androidx.compose.ui.text.input.KeyboardType
-          import androidx.compose.foundation.text.KeyboardOptions
           import androidx.compose.ui.unit.dp
-          import com.growtracker.app.data.Event
-          import com.growtracker.app.data.Fertilizer
-          import com.growtracker.app.data.Plant
+          import com.growtracker.app.ui.MainViewModel
+          import com.growtracker.app.ui.theme.*
           import java.time.LocalDateTime
           import java.time.format.DateTimeFormatter
           @Composable
-          fun AddEventDialog(plants: List<Plant>, ferts: List<Fertilizer>, onDismiss: () -> Unit, onSave: (Event, List<Pair<Long, Double>>) -> Unit) {
-              var selectedPlant by remember { mutableStateOf<Plant?>(null) }
-              var expanded by remember { mutableStateOf(false) }
-              var inPpm by remember { mutableStateOf("") }
-              var outPpm by remember { mutableStateOf("") }
-              var note by remember { mutableStateOf("") }
-              val selectedFerts = remember { mutableStateMapOf<Long, Boolean>() }
-
-              AlertDialog(
-                  onDismissRequest = onDismiss,
-                  title = { Text("ДОБАВИТЬ СОБЫТИЕ") },
-                  text = {
-                      Column(Modifier.verticalScroll(rememberScrollState())) {
-                          Box {
-                              OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                                  Text(selectedPlant?.name ?: "Выбрать растение")
-                              }
-                              DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                  plants.forEach { p ->
-                                      DropdownMenuItem(text = { Text(p.name) }, onClick = { selectedPlant = p; expanded = false })
-                                  }
-                              }
-                          }
-                          Spacer(Modifier.height(8.dp))
-                          OutlinedTextField(value = inPpm, onValueChange = { inPpm = it }, label = { Text("Вход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                          Spacer(Modifier.height(8.dp))
-                          OutlinedTextField(value = outPpm, onValueChange = { outPpm = it }, label = { Text("Выход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
-                          Spacer(Modifier.height(8.dp))
-                          OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Заметка") }, modifier = Modifier.fillMaxWidth())
-                          Spacer(Modifier.height(16.dp))
-                          Text("Удобрения:", style = MaterialTheme.typography.titleLarge)
-                          ferts.forEach { f ->
-                              Row(Modifier.fillMaxWidth().clickable { selectedFerts[f.id] = !(selectedFerts[f.id] ?: false) }, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                  Checkbox(checked = selectedFerts[f.id] ?: false, onCheckedChange = { selectedFerts[f.id] = it })
-                                  Text(f.name)
-                              }
+          fun DiaryScreen(viewModel: MainViewModel) {
+              val notes by viewModel.diaryNotes.collectAsState()
+              Column(Modifier.fillMaxSize().padding(20.dp)) {
+                  Text("ДНЕВНИК ОШИБОК", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      items(notes) { n ->
+                          Column(Modifier.fillMaxWidth().background(Surface, RoundedCornerShape(12.dp)).padding(16.dp)) {
+                              Text(LocalDateTime.parse(n.dateTime).format(DateTimeFormatter.ofPattern("dd.MM.yyyy")), color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                              Spacer(Modifier.height(4.dp))
+                              Text(n.text, color = if (n.isError) Red else TextPrimary, style = MaterialTheme.typography.bodyMedium)
                           }
                       }
-                  },
-                  confirmButton = {
-                      Button(onClick = {
-                          if (selectedPlant != null) {
-                              val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                              val ev = Event(plantId = selectedPlant!!.id, type = "water", dateTime = now, inPpm = inPpm.toIntOrNull(), outPpm = outPpm.toIntOrNull(), volumeL = 1.0, note = note)
-                              val fertList = selectedFerts.filter { it.value }.map { it.key to 1.0 }
-                              onSave(ev, fertList)
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/AiChatScreen.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.background
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.lazy.LazyColumn
+          import androidx.compose.foundation.lazy.items
+          import androidx.compose.foundation.shape.RoundedCornerShape
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.ui.theme.*
+          data class Message(val text: String, val isUser: Boolean)
+          @Composable
+          fun AiChatScreen() {
+              var input by remember { mutableStateOf("") }
+              val messages = remember { mutableStateListOf(Message("Привет! Я твой ИИ-агроном. Чем помочь?", false)) }
+              Column(Modifier.fillMaxSize().padding(16.dp)) {
+                  Text("ИИ-АССИСТЕНТ", style = MaterialTheme.typography.displayLarge, color = Lime)
+                  Spacer(Modifier.height(16.dp))
+                  LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                      items(messages) { m ->
+                          Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp), contentAlignment = if (m.isUser) androidx.compose.ui.Alignment.CenterEnd else androidx.compose.ui.Alignment.CenterStart) {
+                              Text(m.text, color = if (m.isUser) OnLime else TextPrimary, modifier = Modifier.background(if (m.isUser) Lime else Surface, RoundedCornerShape(12.dp)).padding(12.dp))
                           }
-                      }) { Text("Сохранить") }
-                  },
-                  dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
-              )
+                      }
+                  }
+                  Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                      OutlinedTextField(value = input, onValueChange = { input = it }, modifier = Modifier.weight(1f), placeholder = { Text("Вопрос...") })
+                      Spacer(Modifier.width(8.dp))
+                      Button(onClick = { 
+                          if (input.isNotBlank()) {
+                              messages.add(Message(input, true)); input = ""
+                              messages.add(Message("Извини, для подключения ИИ нужен API-ключ. Функция в разработке.", false))
+                          }
+                      }) { Text("Отпр") }
+                  }
+              }
           }
           EOF
 
@@ -704,11 +786,7 @@ jobs:
           import androidx.compose.foundation.layout.padding
           import androidx.compose.material.icons.Icons
           import androidx.compose.material.icons.filled.Add
-          import androidx.compose.material.icons.outlined.BarChart
-          import androidx.compose.material.icons.outlined.CalendarToday
-          import androidx.compose.material.icons.outlined.Home
-          import androidx.compose.material.icons.outlined.List
-          import androidx.compose.material.icons.outlined.Settings
+          import androidx.compose.material.icons.outlined.*
           import androidx.compose.material3.*
           import androidx.compose.runtime.*
           import androidx.compose.ui.Modifier
@@ -725,23 +803,22 @@ jobs:
               data object Home : Screen("home", "Главная", Icons.Outlined.Home)
               data object Journal : Screen("journal", "Журнал", Icons.Outlined.List)
               data object Calendar : Screen("calendar", "Календарь", Icons.Outlined.CalendarToday)
-              data object Charts : Screen("charts", "Графики", Icons.Outlined.BarChart)
+              data object Calculator : Screen("calc", "Кальк", Icons.Outlined.Calculate)
               data object Menu : Screen("menu", "Меню", Icons.Outlined.Settings)
           }
           @Composable
           fun AppNavigation() {
               val navController = rememberNavController()
-              val items = listOf(Screen.Home, Screen.Journal, Screen.Calendar, Screen.Charts, Screen.Menu)
+              val items = listOf(Screen.Home, Screen.Journal, Screen.Calendar, Screen.Calculator, Screen.Menu)
               val viewModel: MainViewModel = viewModel()
               val plants by viewModel.plants.collectAsState()
               val ferts by viewModel.fertilizers.collectAsState()
               var showAddDialog by remember { mutableStateOf(false) }
+              
               Scaffold(
                   floatingActionButton = {
                       if (!showAddDialog) {
-                          FloatingActionButton(onClick = { showAddDialog = true }, containerColor = Lime, contentColor = OnLime) {
-                              Icon(Icons.Default.Add, contentDescription = "Добавить")
-                          }
+                          FloatingActionButton(onClick = { showAddDialog = true }, containerColor = Lime, contentColor = OnLime) { Icon(Icons.Default.Add, contentDescription = "Добавить") }
                       }
                   },
                   bottomBar = {
@@ -770,8 +847,10 @@ jobs:
                       composable(Screen.Home.route) { HomeScreen(viewModel) }
                       composable(Screen.Journal.route) { JournalScreen(viewModel) }
                       composable(Screen.Calendar.route) { CalendarScreen(viewModel) }
-                      composable(Screen.Charts.route) { ChartsScreen() }
-                      composable(Screen.Menu.route) { MenuScreen(viewModel) }
+                      composable(Screen.Calculator.route) { CalculatorScreen(viewModel) }
+                      composable(Screen.Menu.route) { MenuScreen(viewModel, onNavigateAi = { navController.navigate("ai") }, onNavigateDiary = { navController.navigate("diary") }) }
+                      composable("ai") { AiChatScreen() }
+                      composable("diary") { DiaryScreen(viewModel) }
                   }
               }
               if (showAddDialog) {
@@ -780,6 +859,86 @@ jobs:
                       showAddDialog = false
                   })
               }
+          }
+          EOF
+
+          cat << 'EOF' > app/src/main/java/com/growtracker/app/ui/screens/AddEventDialog.kt
+          package com.growtracker.app.ui.screens
+          import androidx.compose.foundation.clickable
+          import androidx.compose.foundation.layout.*
+          import androidx.compose.foundation.rememberScrollState
+          import androidx.compose.foundation.verticalScroll
+          import androidx.compose.material3.*
+          import androidx.compose.runtime.*
+          import androidx.compose.ui.Modifier
+          import androidx.compose.ui.text.input.KeyboardType
+          import androidx.compose.foundation.text.KeyboardOptions
+          import androidx.compose.ui.unit.dp
+          import com.growtracker.app.data.Event
+          import com.growtracker.app.data.Fertilizer
+          import com.growtracker.app.data.Plant
+          import java.time.LocalDateTime
+          import java.time.format.DateTimeFormatter
+          @Composable
+          fun AddEventDialog(plants: List<Plant>, ferts: List<Fertilizer>, onDismiss: () -> Unit, onSave: (Event, List<Pair<Long, Double>>) -> Unit) {
+              var selectedPlant by remember { mutableStateOf<Plant?>(null) }
+              var expanded by remember { mutableStateOf(false) }
+              var type by remember { mutableStateOf("water") }
+              var inPpm by remember { mutableStateOf("") }
+              var outPpm by remember { mutableStateOf("") }
+              var volume by remember { mutableStateOf("") }
+              var note by remember { mutableStateOf("") }
+              val selectedFerts = remember { mutableStateMapOf<Long, Boolean>() }
+
+              AlertDialog(
+                  onDismissRequest = onDismiss,
+                  title = { Text("ДОБАВИТЬ СОБЫТИЕ") },
+                  text = {
+                      Column(Modifier.verticalScroll(rememberScrollState())) {
+                          // Растение
+                          Box {
+                              OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(selectedPlant?.name ?: "Выбрать растение") }
+                              DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                  plants.forEach { p -> DropdownMenuItem(text = { Text(p.name) }, onClick = { selectedPlant = p; expanded = false }) }
+                              }
+                          }
+                          Spacer(Modifier.height(8.dp))
+                          // Тип события (упрощенно)
+                          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                              listOf("Полив" to "water", "Компот" to "feed", "Промывка" to "flush").forEach { (label, value) ->
+                                  FilterChip(selected = type == value, onClick = { type = value }, label = { Text(label) })
+                              }
+                          }
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = volume, onValueChange = { volume = it }, label = { Text("Объем (л)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = inPpm, onValueChange = { inPpm = it }, label = { Text("Вход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = outPpm, onValueChange = { outPpm = it }, label = { Text("Выход PPM") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
+                          Spacer(Modifier.height(8.dp))
+                          OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Заметка") }, modifier = Modifier.fillMaxWidth())
+                          Spacer(Modifier.height(16.dp))
+                          Text("Удобрения:", style = MaterialTheme.typography.titleLarge)
+                          ferts.forEach { f ->
+                              Row(Modifier.fillMaxWidth().clickable { selectedFerts[f.id] = !(selectedFerts[f.id] ?: false) }, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                  Checkbox(checked = selectedFerts[f.id] ?: false, onCheckedChange = { selectedFerts[f.id] = it })
+                                  Text(f.name)
+                              }
+                          }
+                      }
+                  },
+                  confirmButton = {
+                      Button(onClick = {
+                          if (selectedPlant != null) {
+                              val now = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                              val ev = Event(plantId = selectedPlant!!.id, type = type, dateTime = now, inPpm = inPpm.toIntOrNull(), outPpm = outPpm.toIntOrNull(), volumeL = volume.toDoubleOrNull(), note = note)
+                              val fertList = selectedFerts.filter { it.value }.map { it.key to 1.0 }
+                              onSave(ev, fertList)
+                          }
+                      }) { Text("Сохранить") }
+                  },
+                  dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } }
+              )
           }
           EOF
 
