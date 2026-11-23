@@ -11,6 +11,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Unzip project
+        run: unzip GrowTracker.zip -d ./
+        
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -23,10 +26,12 @@ jobs:
           gradle-version: '8.10.2'
 
       - name: Build Debug APK
-        run: gradle assembleDebug
+        run: |
+          cd GrowTracker
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GrowTracker-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: GrowTracker/app/build/outputs/apk/debug/app-debug.apk
